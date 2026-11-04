@@ -73,7 +73,7 @@ export function makeAccessVerifier(config,{fetcher=fetch,clock=()=>Date.now()}={
 
 const allowedPostPaths=new Set(['/api/add','/api/start','/api/pause','/api/hold-job','/api/resume-job',
   '/api/prioritize-job','/api/remove-job','/api/preview-remove-folder','/api/remove-folder',
-  '/api/retry','/api/clear','/api/link','/api/settings','/api/cancel-shutdown']);
+  '/api/retry','/api/confirm-filemoon','/api/clear','/api/link','/api/settings','/api/cancel-shutdown']);
 const staticTypes={'/':'text/html; charset=utf-8','/index.html':'text/html; charset=utf-8','/style.css':'text/css; charset=utf-8',
   '/app.js':'application/javascript; charset=utf-8','/remote-install.js':'application/javascript; charset=utf-8',
   '/remote-sw.js':'application/javascript; charset=utf-8','/manifest.webmanifest':'application/manifest+json; charset=utf-8',
