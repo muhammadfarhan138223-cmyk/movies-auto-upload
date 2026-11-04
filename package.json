@@ -1,0 +1,6 @@
+{
+ "name":"moviehub-auto-uploader","version":"2.2.0","type":"module","private":true,
+ "description":"Windows upload queue for authorized videos; remote read-only PWA via Supabase RLS",
+ "scripts":{"start":"node src/server.mjs","test":"node --test","check":"node --check src/queue.mjs && node --check src/server.mjs && node --check src/providers.mjs && node --check src/shutdown.mjs && node --check src/sync.mjs"},
+ "engines":{"node":">=22"}
+}

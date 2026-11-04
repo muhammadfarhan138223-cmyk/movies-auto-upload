@@ -1,0 +1,17 @@
+MOVIEHUB AUTO UPLOADER V2 — QUICK START
+
+1. Extract V2 ZIP and keep the V1 backup.
+2. Open V2 folder in VS Code.
+3. Existing V1 user? Run:
+   node scripts/migrate-from-v1.mjs "C:\Users\Lenovo\Documents\MovieHub_Auto_Uploader_V1\MovieHub_Auto_Uploader"
+4. If not migrating, copy .env.example to .env and add provider API credentials privately.
+5. Run: npm.cmd test
+6. Run: npm.cmd start
+7. Open: http://127.0.0.1:8766
+8. Test with one small OWNED/authorized MP4 first.
+9. Enable Windows Auto Shutdown ONLY if desired, after reading safety warnings.
+10. Mobile PWA: read docs/MOBILE_SETUP.md; it needs Supabase owner + agent users, RLS SQL, public GitHub Pages and Auth Redirect URL config.
+
+Pause after current = NO SHUTDOWN.
+Auto Shutdown = schedule Windows shutdown ONLY after all jobs successful and explicitly enabled.
+Keep laptop awake. Never commit .env, data/queue.json or movie files.

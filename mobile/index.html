@@ -1,0 +1,15 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a10"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Secure MovieHub uploader mobile monitoring dashboard"><title>MovieHub · Upload Monitor</title>
+<link rel="icon" href="./icons/icon-192.png"><link rel="apple-touch-icon" href="./icons/icon-192.png"><link rel="manifest" href="./manifest.webmanifest"><link rel="stylesheet" href="./style.css"></head>
+<body><div class="app"><header><div class="brand"><div class="logo">▶</div><div><b>MOVIEHUB</b><small>UPLOAD MONITOR</small></div></div><span id="network" class="pill">Connecting</span></header>
+<main><section class="hero"><p class="eyebrow">PRIVATE DEVICE MONITOR</p><h1>Upload status, <em>anywhere.</em></h1><p>Read-only status from your laptop. Files and provider credentials never enter the PWA.</p></section>
+<div id="setup" class="panel" hidden><h2>Finish setup</h2><p>Public configuration is missing. See <code>docs/MOBILE_SETUP.md</code>.</p></div>
+<section id="login" class="panel" hidden><h2>Sign in</h2><p>Enter the email address of the owner user created in your Supabase project. A magic sign-in link will be emailed to you.</p>
+<form id="loginForm"><label>Email address<input id="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><button type="submit" class="primary">Send secure login link</button></form><p class="hint">Only the configured owner can read upload progress.</p></section>
+<section id="dashboard" hidden><div class="toolbar"><span id="lastUpdate">No sync yet</span><div><button id="refresh" type="button">↻ Refresh</button><button id="logout" type="button">Sign out</button></div></div>
+<div class="stats"><article><small>Total</small><strong id="total">0</strong></article><article><small>Completed</small><strong id="done">0</strong></article><article><small>Pending</small><strong id="pending">0</strong></article><article><small>Review / Failed</small><strong id="failed">0</strong></article></div>
+<section class="panel"><div class="panelhead"><h2>Current queue</h2><span id="running" class="pill">Unknown</span></div><div id="jobs" class="jobs"><p class="hint">No synced jobs yet.</p></div></section>
+<section class="panel"><h2>Windows shutdown</h2><p id="shutdown">Not scheduled.</p><p class="hint">Remote viewing only. Start, pause, retry, and cancel shutdown from your laptop, not this mobile page.</p></section></section>
+<p id="message" role="status" class="message"></p><footer>MovieHub Auto Uploader • Read-only PWA • Uploaded bytes bypass Vercel</footer></main></div>
+<script src="./config.js" defer></script><script src="./app.js" defer></script></body></html>

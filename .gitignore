@@ -1,0 +1,25 @@
+.env
+.env.*
+!.env.example
+data/*
+!data/.gitkeep
+*.log
+node_modules/
+.DS_Store
+.vscode/
+mobile/config.js
+
+.env
+.env.*
+!.env.example
+data/*.json
+
+# Never commit private video media, backup archives, or local temp files
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+*.m4v
+*.zip
+*.tmp
