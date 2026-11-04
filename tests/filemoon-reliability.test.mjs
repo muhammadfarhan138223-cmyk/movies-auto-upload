@@ -31,10 +31,10 @@ test('FileMoon 503 retries only the failed chunk, preserving UUID and index',asy
  },async ({filePath,url})=>{
   const got=await uploadFile(options({filePath,url}));
   assert.equal(got.id,'real-file-id');assert.equal(hits,3);
-  assert.match(bodies[0],/name="dzchunkindex"\\r\\n\\r\\n0/);
-  assert.match(bodies[1],/name="dzchunkindex"\\r\\n\\r\\n0/);
-  assert.match(bodies[2],/name="dzchunkindex"\\r\\n\\r\\n1/);
-  const uuid=bodies.map(x=>x.match(/name="dzuuid"\\r\\n\\r\\n([^\\r]+)/)?.[1]);
+  assert.match(bodies[0],/name="dzchunkindex"\r\n\r\n0/);
+  assert.match(bodies[1],/name="dzchunkindex"\r\n\r\n0/);
+  assert.match(bodies[2],/name="dzchunkindex"\r\n\r\n1/);
+  const uuid=bodies.map(x=>x.match(/name="dzuuid"\r\n\r\n([^\r]+)/)?.[1]);
   assert.ok(uuid[0]);assert.equal(new Set(uuid).size,1);
  });
 });
@@ -52,14 +52,14 @@ test('FileMoon 429 retries without restarting accepted chunks',async()=>{
 test('FileMoon does not replay 403 authentication or permission failures',async()=>{
  let hits=0;
  await withServer(async(req,res)=>{await body(req);hits++;return respond(res,{success:false,error:{code:'TOKEN_ABILITY_DENIED',message:'files:write missing'}},403);},async({filePath,url})=>{
-  await assert.rejects(uploadFile(options({filePath,url})),/chunk 1\\/2.*HTTP 403.*TOKEN_ABILITY_DENIED/);
+  await assert.rejects(uploadFile(options({filePath,url})),/chunk 1\/2.*HTTP 403.*TOKEN_ABILITY_DENIED/);
   assert.equal(hits,1);
  });
 });
 test('FileMoon repeated 502 stops after three attempts and never falsely completes',async()=>{
  let hits=0;
  await withServer(async(req,res)=>{await body(req);hits++;return respond(res,{success:false,error:{code:'UPSTREAM',message:'try later'}},502);},async({filePath,url})=>{
-  await assert.rejects(uploadFile(options({filePath,url})),/chunk 1\\/2, attempt 3\\/3.*HTTP 502/);
+  await assert.rejects(uploadFile(options({filePath,url})),/chunk 1\/2, attempt 3\/3.*HTTP 502/);
   assert.equal(hits,3);
  });
 });
