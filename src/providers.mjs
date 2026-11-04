@@ -129,7 +129,8 @@ async function sendMultipart({filePath,size,provider,config,url,signal,onProgres
     // Dropzone-style chunk endpoints may acknowledge intermediate pieces with
     // short plain text rather than JSON. Final completion still needs a file ID.
     const text=raw.trim();
-    if(provider==='filemoon' && (!text || /^(?:ok|success|accepted|chunk\s+(?:received|uploaded|accepted))/i.test(text))) {
+    if(!response.ok || (provider==='filemoon' && (!text || /^(?:ok|success|accepted|chunk\s+(?:received|uploaded|accepted))/i.test(text)))) {
+      // Preserve real HTTP 429/5xx even when the reverse proxy replies with plain text.
       data={};
     } else {
       const e=new Error(`${provider} returned an unexpected non-JSON response (HTTP ${response.status}). Check account before retrying.`);
@@ -138,8 +139,17 @@ async function sendMultipart({filePath,size,provider,config,url,signal,onProgres
   }
   if(!response.ok){
     const explanation=provider==='filemoon'?fileMoonError(data):'';
-    const e=new Error(`${provider} HTTP ${response.status}${explanation?' — '+explanation:''}. Check account before retrying.`);
-    e.uncertain=true;throw e;
+    const requestId=provider==='filemoon' ? String(response.headers.get('x-request-id')||'').slice(0,80).replace(/[^a-zA-Z0-9_-]/g,'') : '';
+    const e=new Error(`${provider} HTTP ${response.status}${explanation?' — '+explanation:''}${requestId?' · request_id='+requestId:''}. Check account before retrying.`);
+    e.uncertain=true;
+    e.httpStatus=response.status;
+    const retryAfter=response.headers.get('retry-after');
+    if(retryAfter){
+      const n=Number(retryAfter);
+      const ms=Number.isFinite(n)?n*1000:Date.parse(retryAfter)-Date.now();
+      if(Number.isFinite(ms))e.retryAfterMs=Math.min(60000,Math.max(1000,ms));
+    }
+    throw e;
   }
   if(provider==='filemoon') {
     // Preserve transport-level acknowledgement separately from FileMoon's
@@ -181,30 +191,73 @@ function confirmed(provider,data) {
   return Number(data?.status)===200 || Number(data?.result?.status)===200;
 }
 
-/** FileMoon: use conservative 64 MiB chunks, below documented 90 MB edge threshold. */
+/** FileMoon chunks are acknowledged individually; bounded retries replay only the same chunk/UUID.
+ * Never treat local bytes read as proof that the complete file exists on the host. */
+export function filemoonCanRetry(error,signal){
+  if(signal?.aborted)return false;
+  if(error?.httpStatus)return [408,429,500,502,503,504].includes(error.httpStatus);
+  const cause=String(error?.cause?.code||error?.code||'');
+  const message=String(error?.message||'');
+  return /^(?:ECONNRESET|ETIMEDOUT|EPIPE|UND_ERR_SOCKET|UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_BODY_TIMEOUT)$/.test(cause)
+    || /fetch failed|socket hang up|network connection lost/i.test(message);
+}
+async function waitRetry(ms,signal){
+  if(signal?.aborted)throw signal.reason || new Error('Upload aborted');
+  await new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{signal?.removeEventListener('abort',onAbort);resolve();},ms);
+    function onAbort(){clearTimeout(timer);reject(signal.reason || new Error('Upload aborted'));}
+    signal?.addEventListener('abort',onAbort,{once:true});
+  });
+}
+
+/** FileMoon defaults to 8 MiB chunks, below its documented 90 MB limit.
+ * Progress inside an in-flight chunk reflects locally read data, not server confirmation. */
 export async function uploadFile({filePath,size,provider,config,url,signal,onProgress,
-  filemoonChunkBytes=64*1024*1024}) {
+  filemoonChunkBytes=8*1024*1024, filemoonMaxAttempts=3, filemoonRetryBaseMs=1600}) {
   if(provider==='filemoon'){
-    if(!Number.isInteger(filemoonChunkBytes)||filemoonChunkBytes<1)throw new Error('Invalid FileMoon chunk size');
+    if(!Number.isInteger(filemoonChunkBytes)||filemoonChunkBytes<1||filemoonChunkBytes>64*1024*1024)throw new Error('Invalid FileMoon chunk size (1..64 MiB)');
+    if(!Number.isInteger(filemoonMaxAttempts)||filemoonMaxAttempts<1||filemoonMaxAttempts>3)throw new Error('Invalid retry attempts (1..3)');
     const chunks=Math.ceil(size/filemoonChunkBytes), uuid=randomUUID();
-    let last;
+    let last;let lastStarted=0;
     for(let i=0;i<chunks;i++){
       const offset=i*filemoonChunkBytes, length=Math.min(filemoonChunkBytes,size-offset);
       const fields={visibility:'1'};
       if(chunks>1)Object.assign(fields,{dzuuid:uuid,dzchunkindex:i,dztotalchunkcount:chunks,
         dzchunksize:filemoonChunkBytes,dztotalfilesize:size,dzchunkbyteoffset:offset});
-      const data=await sendMultipart({filePath,size,provider,config,url,signal,
-        start:offset,end:offset+length-1,fields,
-        headers:{Authorization:`Bearer ${config.filemoonToken}`,Accept:'application/json'},
-        onProgress:partSent=>onProgress(Math.min(99,Math.floor((offset+partSent)/size*100)),offset+partSent)});
-      if(!confirmed(provider,data)){
-        const detail=fileMoonError(data);
-        const e=new Error(`FileMoon rejected chunk ${i+1}/${chunks}${detail?' — '+detail:''}. Check API token permissions and provider account.`);e.uncertain=true;throw e;
+      let data;
+      for(let attempt=1;attempt<=filemoonMaxAttempts;attempt++){
+        if(signal?.aborted)throw signal.reason || new Error('Upload aborted');
+        const since=Date.now()-lastStarted;
+        // Stay below FileMoon's 60 requests/minute API ceiling.
+        if(lastStarted && since<1050)await waitRetry(1050-since,signal);
+        lastStarted=Date.now();
+        try{
+          data=await sendMultipart({filePath,size,provider,config,url,signal,
+            start:offset,end:offset+length-1,fields,
+            headers:{Authorization:'Bearer '+config.filemoonToken,Accept:'application/json'},
+            onProgress:partSent=>onProgress(Math.min(99,Math.floor((offset+partSent)/size*100)),offset+partSent)});
+          if(!confirmed(provider,data)){
+            const detail=fileMoonError(data);
+            const e=new Error('FileMoon rejected chunk '+(i+1)+'/'+chunks+(detail?' — '+detail:'')+'. Check token permissions/provider account.');
+            e.uncertain=true;throw e;
+          }
+          break;
+        }catch(e){
+          const shouldRetry=attempt<filemoonMaxAttempts && filemoonCanRetry(e,signal);
+          if(!shouldRetry){
+            const err=new Error('FileMoon chunk '+(i+1)+'/'+chunks+', attempt '+attempt+'/'+filemoonMaxAttempts+': '+(e.message||'network error'));
+            err.uncertain=true;err.cause=e;throw err;
+          }
+          onProgress(Math.min(99,Math.floor(offset/size*100)),offset);
+          const delay=Math.min(60000,Math.max(e.retryAfterMs||0,filemoonRetryBaseMs*2**(attempt-1)));
+          await waitRetry(delay,signal);
+        }
       }
       last=data;
+      onProgress(Math.min(99,Math.floor((offset+length)/size*100)),offset+length);
     }
     const result=findResult(provider,last);
-    if(!result){const e=new Error('FileMoon accepted data but no public file ID in final response. Check FileMoon files before retrying.');e.uncertain=true;throw e;}
+    if(!result){const e=new Error('FileMoon chunks acknowledged but final response has no public file ID. Check FileMoon account before retrying.');e.uncertain=true;throw e;}
     onProgress(100,size);return result;
   }
   const data=await sendMultipart({filePath,size,provider,config,url,signal,
