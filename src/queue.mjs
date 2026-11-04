@@ -199,14 +199,21 @@ export class UploadQueue {
    try{destination=await getUploadDestination(job.provider,this.config);break;}
    catch(e){if(i===2){job.status='failed';job.error=`Upload destination failed: ${e.message}`;return;}await sleep(1500*(i+1));}
   }
-  this.controller=new AbortController();let watchdog;
-  const renew=()=>{clearTimeout(watchdog);watchdog=setTimeout(()=>this.controller?.abort(),15*60*1000);watchdog.unref?.();};renew();
+  this.controller=new AbortController();let watchdog;let idleTimeoutHit=false;
+  const idleMinutes=job.provider==='filemoon'?30:15;
+  const renew=()=>{clearTimeout(watchdog);watchdog=setTimeout(()=>{
+    idleTimeoutHit=true;
+    this.controller?.abort(new Error(`No upload activity for ${idleMinutes} minutes (network or host stalled)`));
+  },idleMinutes*60*1000);watchdog.unref?.();};renew();
   try{
    const result=await uploadFile({filePath:job.filePath,size:job.size,provider:job.provider,config:this.config,url:destination,
     signal:this.controller.signal,onProgress:(pct)=>{renew();job.progress=pct;job.updatedAt=now();this.onChange();
       if(Date.now()-this.lastSavedAt>6000)void this.save().catch(e=>console.error('Progress save:',e.message));}});
    job.status='completed';job.progress=100;job.url=result.url||'';job.remoteId=result.id||'';job.alternateUrls=result.alternateUrls||[];
-  }catch(e){job.status='review';job.error=`Transfer result unconfirmed: ${e.message}. Verify provider account BEFORE retrying.`;}
+  }catch(e){job.status='review';
+    const detail=idleTimeoutHit?`No upload activity for ${idleMinutes} minutes; transfer cancelled by watchdog`:(e.message||'Unknown upload error');
+    job.error=`Transfer result unconfirmed: ${detail}. Check provider account BEFORE retrying.`;
+  }
   finally{clearTimeout(watchdog);this.controller=null;job.updatedAt=now();}
  }
  async syncStatus(){if(!this.sync.enabled)return false;return this.sync.push(this.remoteState());}
