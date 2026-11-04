@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { configured, getUploadDestination, uploadFile } from './providers.mjs';
+import { verifyFileMoonUpload } from './filemoon-verify.mjs';
 import { StatusSync } from './sync.mjs';
 import { ShutdownManager } from './shutdown.mjs';
 const videoExtensions = new Set(['.mp4','.mkv','.mov','.webm','.avi','.m4v']);
@@ -160,6 +161,17 @@ export class UploadQueue {
   const job=this.jobs.find(j=>j.id===id);
   if(!job||!['failed','review'].includes(job.status))throw new Error('Only failed/review jobs can be retried');
   job.status='pending';job.progress=0;job.error='';job.updatedAt=now();await this.save();
+ }
+ async confirmFileMoonSaved(id,shareUrl){
+  const job=this.jobs.find(j=>j.id===id);
+  if(!job||job.provider!=='filemoon'||job.status!=='review')throw new Error('Choose a FileMoon job that needs review.');
+  const found=await verifyFileMoonUpload({shareUrl,token:this.config.filemoonToken,
+   expectedName:job.name,expectedSize:job.size});
+  // Avoid writing a stale result if the queue changed during verification.
+  if(job.status!=='review')throw new Error('Queue changed during verification. Refresh and try again.');
+  job.status='completed';job.progress=100;job.remoteId=found.id;job.url=found.url;
+  job.error='';job.verifiedBy='filemoon-api';job.updatedAt=now();
+  await this.save();void this.syncStatus();return cleanJob(job);
  }
  async clearCompleted(){if(this.busy||this.running)throw new Error('Pause and finish current upload before clearing');
   this.jobs=this.jobs.filter(j=>j.status!=='completed');await this.save();}
