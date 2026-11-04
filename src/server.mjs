@@ -47,6 +47,7 @@ const server=http.createServer(async(req,res)=>{
     case '/api/remove-job':result=await queue.removeJob(body.id);break;
     case '/api/preview-remove-folder':result=queue.previewFolderRemoval(body.folder);break;
     case '/api/remove-folder':result=await queue.removeFolderJobs(body.folder,body.ids);break;
+    case '/api/confirm-filemoon':result=await queue.confirmFileMoonSaved(body.id,body.url);break;
     case '/api/retry':await queue.reviewRetry(body.id);break;
     case '/api/clear':await queue.clearCompleted();break;
     case '/api/link':result=await queue.updateLink(body.id,body.url);break;
