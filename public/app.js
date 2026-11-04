@@ -33,7 +33,7 @@ async function refresh(){
    return `<tr><td><b>${escapeText(j.name)}</b><small>${(j.size/1048576).toFixed(1)} MiB${j.remoteId?' · ID: '+escapeText(j.remoteId):''}</small></td><td>${escapeText(j.provider)}</td>
    <td><div class="track"><div class="fill" style="width:${Math.min(100,Math.max(0,Number(j.progress)||0))}%"></div></div><small>${j.progress||0}%</small></td>
    <td><span class="tag">${escapeText(j.status)}</span>${result}${more}${j.error?`<small>${escapeText(j.error)}</small>`:''}</td>
-   <td class="job-actions">${j.status==='pending'?`<button data-prioritize="${escapeText(j.id)}" title="Upload after current job">⬆ Move to top</button><button data-hold="${escapeText(j.id)}">⏸ Hold</button><button data-remove="${escapeText(j.id)}" class="remove">✕ Remove</button>`:j.status==='held'?`<button data-resume="${escapeText(j.id)}">▶ Resume job</button><button data-remove="${escapeText(j.id)}" class="remove">✕ Remove</button>`:['failed','review'].includes(j.status)?`<button data-retry="${escapeText(j.id)}">Verify & retry</button>`:j.status==='completed'?`<button data-link="${escapeText(j.id)}">Set working link</button>`:'—'}</td></tr>`;
+   <td class="job-actions">${j.status==='pending'?`<button data-prioritize="${escapeText(j.id)}" title="Upload after current job">⬆ Move to top</button><button data-hold="${escapeText(j.id)}">⏸ Hold</button><button data-remove="${escapeText(j.id)}" class="remove">✕ Remove</button>`:j.status==='held'?`<button data-resume="${escapeText(j.id)}">▶ Resume job</button><button data-remove="${escapeText(j.id)}" class="remove">✕ Remove</button>`:j.provider==='filemoon' && j.status==='review'?`<button data-confirm-filemoon="${escapeText(j.id)}">✓ Verify saved file</button><button data-retry="${escapeText(j.id)}">Verify & retry</button>`:['failed','review'].includes(j.status)?`<button data-retry="${escapeText(j.id)}">Verify & retry</button>`:j.status==='completed'?`<button data-link="${escapeText(j.id)}">Set working link</button>`:'—'}</td></tr>`;
   }).join('')||'<tr><td colspan="5">No jobs yet. Add a folder above.</td></tr>';
  }catch(e){$('#connection').textContent='Local server disconnected';notice(e.message);}
 }
@@ -73,6 +73,14 @@ $('#rows').addEventListener('click',async e=>{
  if(resume){try{await api('resume-job','POST',{id:resume});notice('Job resumed and pending. Press Start uploading if queue is idle.',true);await refresh();}catch(err){notice(err.message)}return;}
  if(remove){if(!confirm('Remove this pending/held upload JOB from the queue?\nOriginal video on disk will NOT be deleted.'))return;
   try{await api('remove-job','POST',{id:remove});notice('Job removed from queue. File on disk is unchanged.',true);await refresh();}catch(err){notice(err.message)}return;}
+ const confirmFilemoon=e.target.closest('[data-confirm-filemoon]')?.dataset.confirmFilemoon;
+ if(confirmFilemoon){
+  const url=prompt('FileMoon My Files → Share: paste the official https://filemoon.org/FILE_ID/file URL. The app checks the file ID, name and size using your local FileMoon token (needs files:read). It will NOT upload again.');
+  if(url===null)return;
+  try{await api('confirm-filemoon','POST',{id:confirmFilemoon,url:url.trim()});notice('Saved FileMoon file verified. Upload marked completed; video processing may still be running.',true);await refresh();}
+  catch(err){notice('Verification failed: '+err.message);}
+  return;
+ }
  const retry=e.target.closest('[data-retry]')?.dataset.retry;
  const link=e.target.closest('[data-link]')?.dataset.link;
  if(retry){if(!confirm('VERIFY the file in your provider account first. Retrying may create duplicates. Retry?'))return;
