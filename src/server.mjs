@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { loadConfig,dataFile,root } from './config.mjs';
 import { UploadQueue } from './queue.mjs';
+import { startRemoteGateway } from './remote-gateway.mjs';
 const config=loadConfig();
 const queue=await new UploadQueue(config,dataFile).init();
 const base=path.join(root,'public');
@@ -67,5 +68,7 @@ server.listen(config.port,'127.0.0.1',()=>{
  console.log(`MovieHub V2 local uploader running: http://127.0.0.1:${config.port}`);
  console.log('No video bytes or API credentials pass through Vercel.');
 });
-async function stop(){await queue.close();server.close();}
+let remoteGateway=null;
+void startRemoteGateway({upstreamPort:config.port}).then(s=>{remoteGateway=s;}).catch(e=>console.error('Remote gateway not started:',e.message));
+async function stop(){await queue.close();server.close();remoteGateway?.close();}
 process.on('SIGINT',stop);process.on('SIGTERM',stop);
