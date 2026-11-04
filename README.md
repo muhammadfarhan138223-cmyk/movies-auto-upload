@@ -61,7 +61,15 @@ Windows laptop handles uploads directly to provider APIs; optional, passwordless
 - Auto shutdown requires a **one-time explicit enable/confirmation** (no new permission prompt at completion). Windows uses its own countdown (`shutdown.exe /s /t N`); cancel locally with dashboard or `shutdown /a` before the countdown ends. **Unsaved work in other apps can be lost.**
 - On power loss / app restart, any interrupted in-flight upload is marked `review`, not retried automatically, because the provider might already have accepted it. Pending jobs remain persisted; click Start after restarting.
 
-## Private mobile PWA, accessible from anywhere
+## Private full-control mobile PWA — no Vercel / Supabase
+
+**New optional mode:** Secure Cloudflare Tunnel + Cloudflare Access at `https://autoupload.farhanbalouch.com`. Mobile browser/PWA can inspect queue progress, failures and control Pause/Start, Hold/Resume, Retry, priority, Remove, and shutdown settings. The upload engine stays localhost-only. A separate gateway on `127.0.0.1:8767` validates **Cloudflare Access JWT signature, audience, team issuer, expiry, and the owner's email** before proxying approved requests to `127.0.0.1:8766`. It remains **disabled unless `REMOTE_ENABLED=1`** with all private .env settings present.
+
+**Setup:** [Cloudflare Remote Control — Roman Urdu](docs/CLOUDFLARE_REMOTE_CONTROL.md). Only create the Tunnel published hostname **after Access is configured**, and route it to **8767, never 8766**. No manual port forwarding. This is independent of the older, optional Supabase **read-only** mode; its GitHub Pages workflow no longer runs automatically on commits.
+
+Cloudflare Tunnel requires the laptop, connection, and upload server to be online. Without external state storage, the browser may only show an offline page or a Cloudflare error when the laptop is off, not an authoritative last progress snapshot.
+
+## Legacy read-only mobile PWA via Supabase (optional)
 
 A hosted PWA is **separate from the localhost uploader**. The laptop authenticates as a dedicated **agent user** and writes small snapshots to a Supabase table. A separately authenticated **owner user** can read those snapshots; RLS prevents other logged-in users from viewing them.
 
@@ -73,7 +81,7 @@ The PWA is **read-only**, not a remote control: it cannot start/stop uploads or 
 
 Provider APIs are documented here: [Streamtape](https://streamtape.com/api), [DoodStream](https://doodstream.com/api-docs), FileMoon, StreamWish. New providers require their own API credentials and live verification. Credentials are read only by `src/config.mjs` on the laptop, from the ignored `.env` file. API response URLs may be broken or short-lived; use host account's **Get Link** and the **Set working link** button. Successful API response does not guarantee playable media everywhere.
 
-Local queue is deduplicated by exact file path, file size, modified time, and provider. It is not a content-hash-based deduplicator. If files are moved/modified, they may count as new. 15 minutes of upload inactivity triggers a transfer abort and manual review; HTTP uploads are not guaranteed resumable at byte offsets.
+Local queue is deduplicated by exact file path, file size, modified time, and provider. It is not a content-hash-based deduplicator. If files are moved/modified, they may count as new. 15 minutes of non-FileMoon inactivity (30 minutes for FileMoon) triggers a transfer abort and manual review; HTTP uploads are not guaranteed resumable at byte offsets.
 
 ### Folder structure
 
